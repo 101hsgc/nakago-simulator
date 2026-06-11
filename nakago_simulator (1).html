@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>中子 取り付け・取りはずし シミュレーター — 型枠 B・C</title>
+<style>
+  :root{
+    --bg:#14171b; --bg2:#1b1f25; --panel:#1d2128; --line:#2c323b;
+    --ink:#eef1f4; --ink2:#aab2bc; --ink3:#737c87;
+    --mono: ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+    --sans: system-ui,"Helvetica Neue",Arial,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    --teal:#34d6c4; --teal-d:#4d7f78; --red:#e7392f; --amber:#f4a93b; --warn:#d8b251;
+    --steel:#5f656d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #1c2128 0%, var(--bg) 60%) ,
+      var(--bg);
+    color:var(--ink); font-family:var(--sans); line-height:1.5;
+    -webkit-font-smoothing:antialiased; padding:24px 18px 64px;
+  }
+  .wrap{max-width:1080px; margin:0 auto}
+
+  header{margin-bottom:18px}
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.28em;
+    text-transform:uppercase; color:var(--amber); display:flex; align-items:center; gap:9px}
+  .eyebrow .dot{width:13px; height:13px; border-radius:50%; border:2px solid var(--amber);
+    position:relative; flex:none}
+  .eyebrow .dot::after{content:""; position:absolute; inset:2.5px; border-radius:50%; background:var(--amber)}
+  h1{font-family:var(--sans); font-weight:800; letter-spacing:-.01em;
+    font-size:clamp(22px,4.4vw,34px); margin:.28em 0 .15em}
+  .lead{color:var(--ink2); font-size:14.5px; max-width:62ch; margin:0}
+
+  /* ---- layout ---- */
+  .grid{display:grid; grid-template-columns: minmax(0,1fr) 320px; gap:18px; margin-top:20px}
+  @media (max-width:880px){ .grid{grid-template-columns:1fr} }
+
+  .stage-card{background:var(--bg2); border:1px solid var(--line); border-radius:16px;
+    padding:14px; overflow:hidden}
+  .stage{position:relative; border-radius:11px;
+    background-image:
+      linear-gradient(transparent 39px, #ffffff08 40px),
+      linear-gradient(90deg, transparent 39px, #ffffff08 40px);
+    background-size:40px 40px; background-color:#101317}
+  svg.mold{display:block; width:100%; height:auto}
+
+  .nameplate{position:absolute; right:8px; top:50%; transform:translateY(-50%);
+    writing-mode:vertical-rl; font-family:var(--mono); font-size:11px; letter-spacing:.25em;
+    color:var(--amber); opacity:.8; pointer-events:none}
+
+  /* ---- pieces ---- */
+  .piece{cursor:pointer}
+  .piece .shape{transform-box:fill-box; transform-origin:center;
+    transition:fill .25s ease, stroke .2s ease, stroke-width .2s ease}
+  .piece:not(.placed) .shape{fill:rgba(255,255,255,.045); stroke:rgba(255,255,255,.20);
+    stroke-width:1.4; stroke-dasharray:5 4}
+  .piece:not(.placed):hover .shape{fill:rgba(255,255,255,.09); stroke:rgba(255,255,255,.4)}
+  .piece.placed .shape{fill:url(#metal); stroke:var(--steel); stroke-width:1.2; stroke-dasharray:none}
+  .piece.placed.kind-frame .shape{stroke:var(--teal-d)}
+  .piece.placed.oof .shape{fill:url(#metalWarn); stroke:var(--warn)}
+  .piece.active .shape{fill:rgba(52,214,196,.10); stroke:var(--teal); stroke-width:2.4;
+    stroke-dasharray:none; animation:pulse 1.35s ease-in-out infinite}
+  .piece.active:hover .shape{fill:rgba(52,214,196,.20)}
+  .piece.locked{cursor:not-allowed}
+  .piece.locked:not(.placed) .shape{opacity:.4}
+
+  .piece .lbl{font-family:var(--mono); font-weight:700; fill:rgba(233,236,240,.32);
+    pointer-events:none; user-select:none; transition:fill .25s}
+  .piece:not(.placed):hover .lbl{fill:rgba(233,236,240,.6)}
+  .piece.placed .lbl, .piece.active .lbl{fill:var(--red)}
+  .piece .oofmark{display:none}
+  .piece.oof .oofmark{display:block}
+
+  @keyframes pulse{
+    0%,100%{filter:drop-shadow(0 0 2px rgba(52,214,196,.55))}
+    50%{filter:drop-shadow(0 0 9px rgba(52,214,196,.95))}
+  }
+  @keyframes slin-top{from{transform:translateY(-58px);opacity:.12}to{transform:translateY(0);opacity:1}}
+  @keyframes slin-bottom{from{transform:translateY(58px);opacity:.12}to{transform:translateY(0);opacity:1}}
+  @keyframes slin-left{from{transform:translateX(-58px);opacity:.12}to{transform:translateX(0);opacity:1}}
+  @keyframes slin-right{from{transform:translateX(58px);opacity:.12}to{transform:translateX(0);opacity:1}}
+  @keyframes pop{from{transform:scale(.7);opacity:.12}to{transform:scale(1);opacity:1}}
+  .anim-top .shape{animation:slin-top .5s cubic-bezier(.2,.85,.25,1)}
+  .anim-bottom .shape{animation:slin-bottom .5s cubic-bezier(.2,.85,.25,1)}
+  .anim-left .shape{animation:slin-left .5s cubic-bezier(.2,.85,.25,1)}
+  .anim-right .shape{animation:slin-right .5s cubic-bezier(.2,.85,.25,1)}
+  .anim-pop .shape{animation:pop .42s cubic-bezier(.2,.9,.25,1)}
+
+  @keyframes slout-top{from{transform:translateY(0);opacity:1}to{transform:translateY(-58px);opacity:.08}}
+  @keyframes slout-bottom{from{transform:translateY(0);opacity:1}to{transform:translateY(58px);opacity:.08}}
+  @keyframes slout-left{from{transform:translateX(0);opacity:1}to{transform:translateX(-58px);opacity:.08}}
+  @keyframes slout-right{from{transform:translateX(0);opacity:1}to{transform:translateX(58px);opacity:.08}}
+  @keyframes popout{from{transform:scale(1);opacity:1}to{transform:scale(.66);opacity:.08}}
+  .anim-out-top .shape{animation:slout-top .4s cubic-bezier(.4,0,.7,.2)}
+  .anim-out-bottom .shape{animation:slout-bottom .4s cubic-bezier(.4,0,.7,.2)}
+  .anim-out-left .shape{animation:slout-left .4s cubic-bezier(.4,0,.7,.2)}
+  .anim-out-right .shape{animation:slout-right .4s cubic-bezier(.4,0,.7,.2)}
+  .anim-out-pop .shape{animation:popout .34s cubic-bezier(.4,0,.7,.2)}
+  /* 取りはずしモード：設置中だがまだ外せない中子は淡く */
+  .piece.placed.locked .shape{opacity:.5}
+  .steps li.free-note .no{color:var(--ink3)}
+  .steps li.free-note .pc{color:var(--ink2)}
+
+  /* ---- readout under stage ---- */
+  .readout{margin-top:12px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    font-size:13.5px; color:var(--ink2); min-height:24px}
+  .readout .tag{font-family:var(--mono); font-weight:700; color:var(--bg);
+    background:var(--teal); padding:2px 9px; border-radius:6px; font-size:12.5px}
+  .readout .tag.done{background:var(--ink3)}
+  .readout b{color:var(--ink)}
+  .readout .ids{font-family:var(--mono); color:var(--red); font-weight:700; letter-spacing:.04em}
+
+  /* ---- side panel ---- */
+  .side{display:flex; flex-direction:column; gap:14px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 15px}
+  .card h2{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink3);
+    font-family:var(--mono); margin:0 0 11px; font-weight:700}
+
+  .modes{display:flex; gap:6px; background:#0f1216; border:1px solid var(--line);
+    border-radius:10px; padding:4px}
+  .modes button{flex:1; appearance:none; border:0; background:transparent; color:var(--ink2);
+    font-family:var(--sans); font-size:13.5px; font-weight:600; padding:8px 6px; border-radius:7px;
+    cursor:pointer; transition:.15s}
+  .modes button[aria-pressed="true"]{background:var(--teal); color:#06201d}
+  .mode-desc{font-size:12.5px; color:var(--ink3); margin:10px 2px 0}
+
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:4px}
+  .stat{background:#0f1216; border:1px solid var(--line); border-radius:10px; padding:9px 11px}
+  .stat .k{font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink3);
+    font-family:var(--mono)}
+  .stat .v{font-family:var(--mono); font-weight:700; font-size:20px; color:var(--ink); margin-top:3px}
+  .stat .v small{font-size:13px; color:var(--ink3); font-weight:400}
+  .bar{height:6px; border-radius:99px; background:#0f1216; border:1px solid var(--line);
+    margin-top:11px; overflow:hidden}
+  .bar > i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--teal-d),var(--teal));
+    transition:width .35s ease}
+
+  .actions{display:flex; gap:8px; margin-top:4px}
+  .actions button{flex:1; appearance:none; cursor:pointer; font-family:var(--sans); font-weight:600;
+    font-size:13px; padding:10px; border-radius:9px; border:1px solid var(--line);
+    background:#0f1216; color:var(--ink); transition:.15s}
+  .actions button:hover{border-color:var(--ink3)}
+  .actions button:disabled{opacity:.4; cursor:not-allowed}
+
+  /* steps list */
+  .steps{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px}
+  .steps li{display:flex; align-items:baseline; gap:10px; padding:7px 8px; border-radius:8px;
+    border-left:2px solid transparent; transition:.15s}
+  .steps li.cur{background:rgba(52,214,196,.08); border-left-color:var(--teal)}
+  .steps li.done{opacity:.5}
+  .steps .no{font-family:var(--mono); font-size:12px; color:var(--ink3); width:18px; flex:none}
+  .steps li.cur .no{color:var(--teal)}
+  .steps li.done .no::after{content:" ✓"; color:var(--teal-d)}
+  .steps .pc{font-family:var(--mono); font-weight:700; color:var(--ink); font-size:13px; letter-spacing:.03em}
+  .steps .nt{color:var(--ink3); font-size:12px; margin-left:auto; text-align:right}
+  .steps.hide-answer .pc, .steps.hide-answer .nt{filter:blur(5px); user-select:none}
+  .answer-toggle{display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12.5px; color:var(--ink2)}
+  .answer-toggle input{accent-color:var(--teal); width:15px; height:15px}
+
+  .legend{font-size:12px; color:var(--ink3); line-height:1.7}
+  .legend b{color:var(--ink2)}
+  .legend .chip{font-family:var(--mono); color:var(--red); font-weight:700}
+
+  /* toast */
+  #toast{position:fixed; left:50%; bottom:26px; transform:translate(-50%,16px);
+    background:#0c0f13; border:1px solid var(--line); color:var(--ink);
+    padding:11px 16px; border-radius:10px; font-size:13.5px; box-shadow:0 12px 30px rgba(0,0,0,.5);
+    opacity:0; pointer-events:none; transition:.25s; max-width:88vw; text-align:center; z-index:50}
+  #toast.show{opacity:1; transform:translate(-50%,0)}
+  #toast.warn{border-color:var(--warn)} #toast.ok{border-color:var(--teal-d)}
+  #toast .ids{font-family:var(--mono); color:var(--red); font-weight:700}
+
+  /* completion overlay */
+  .done-banner{display:none; margin-top:12px; padding:13px 15px; border-radius:11px;
+    border:1px solid var(--teal-d); background:rgba(52,214,196,.08); font-size:14px}
+  .done-banner.show{display:block}
+  .done-banner b{color:var(--teal)}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important; transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow"><span class="dot"></span> HINODE 型枠 B・C / 鋳物中子</div>
+    <h1>中子 取り付け・取りはずしシミュレーター</h1>
+    <p class="lead">コンクリートブロック型枠の鋳物中子19個を、正しい順番で<b style="color:var(--amber)">取り付け／取りはずし</b>する手順を体験できます。配置は実物どおり、北（N）が上・銘板側が東。取り付けは外枠→内枠→端のコアから中央へ、取りはずしは中央の3コアから外していきます。</p>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: stage -->
+    <div class="stage-card">
+      <div class="stage">
+        <span class="nameplate">銘 板 側 →</span>
+        <svg class="mold" viewBox="0 0 1040 600" role="img" aria-label="型枠の上面図">
+          <defs>
+            <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#eef1f3"/><stop offset="0.45" stop-color="#c8ced3"/>
+              <stop offset="0.55" stop-color="#bcc3c9"/><stop offset="1" stop-color="#9097a0"/>
+            </linearGradient>
+            <linearGradient id="metalWarn" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#f0e6c8"/><stop offset="0.5" stop-color="#dcc488"/>
+              <stop offset="1" stop-color="#b89a52"/>
+            </linearGradient>
+          </defs>
+          <!-- cast body + cavity -->
+          <rect x="44" y="66" width="952" height="468" rx="14" fill="#23272d" stroke="#3a3f47"/>
+          <rect x="112" y="132" width="816" height="356" fill="#0c0e11"/>
+          <text x="956" y="520" font-family="var(--mono)" font-size="11" fill="#ffffff14"
+                text-anchor="end" letter-spacing="2">HINODE</text>
+          <!-- compass -->
+          <text x="520" y="56" font-family="system-ui" font-size="15" font-weight="700"
+                fill="#f4a93b" text-anchor="middle">↑ N</text>
+          <text x="520" y="586" font-family="system-ui" font-size="12"
+                fill="#f4a93b" opacity=".7" text-anchor="middle">S</text>
+          <g id="pieces"></g>
+        </svg>
+      </div>
+
+      <div class="readout" id="readout"></div>
+      <div class="done-banner" id="doneBanner"></div>
+    </div>
+
+    <!-- RIGHT: controls -->
+    <div class="side">
+      <div class="card">
+        <h2>モード</h2>
+        <div class="modes" role="group" aria-label="モード切替">
+          <button id="mGuide" aria-pressed="true">取付ガイド</button>
+          <button id="mFree" aria-pressed="false">自由配置</button>
+          <button id="mRemove" aria-pressed="false">取外ガイド</button>
+        </div>
+        <p class="mode-desc" id="modeDesc">光っている中子をタップすると取り付けられます。順番どおりに進みます。</p>
+      </div>
+
+      <div class="card">
+        <h2>進捗</h2>
+        <div class="stats">
+          <div class="stat"><div class="k" id="cntK">設置数</div><div class="v"><span id="cnt">0</span><small> / 19</small></div></div>
+          <div class="stat"><div class="k" id="metaK">ステップ</div><div class="v" id="metaV">1<small> / 9</small></div></div>
+        </div>
+        <div class="bar"><i id="barFill"></i></div>
+        <div class="actions">
+          <button id="undo">ひとつ戻す</button>
+          <button id="reset">最初から</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 id="stepsTitle">取り付け順（全9ステップ）</h2>
+        <label class="answer-toggle"><input type="checkbox" id="showAns" checked> 正解の順番を表示</label>
+        <ol class="steps" id="steps"></ol>
+      </div>
+
+      <div class="card">
+        <h2>読み方</h2>
+        <p class="legend">
+          中央のコアは<b>左右対称</b>です：<span class="chip">W5｜W6 W7 W8｜W9 C E9｜E8 E7 E6｜E5</span>。<br>
+          外周フレームは各辺が外側・内側の2本：北<span class="chip">N2/N4</span>・南<span class="chip">S2/S4</span>・西<span class="chip">W1/W3</span>・東<span class="chip">E1/E3</span>。<br>
+          数字が小さいものから取り付け、<b>中央コア C が最後</b>の要になります。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ===== 取り付け順（赤数字に基づく。修正が必要ならここを書き換え） =====
+  const STEPS = [
+    {n:1, pieces:["W3","E3"],           note:"内枠・東西"},
+    {n:2, pieces:["N4","S4"],           note:"内枠・南北"},
+    {n:3, pieces:["N2","S2"],           note:"外枠・南北"},
+    {n:4, pieces:["W1","E1"],           note:"外枠・東西（最外）"},
+    {n:5, pieces:["W5","E5"],           note:"端のコア（内枠に密着）"},
+    {n:6, pieces:["W6","W8","E6","E8"], note:"各ブロックの外側（両端）"},
+    {n:7, pieces:["W7","E7"],           note:"各ブロックの中央"},
+    {n:8, pieces:["W9","E9"],           note:"中央ブロックの両脇"},
+    {n:9, pieces:["C"],                 note:"中央コア（最後の要）"},
+  ];
+
+  // ===== 取りはずし順（ここまで外せば、あとは順不同でOK。修正はここを書き換え） =====
+  const REMOVE_STEPS = [
+    {n:1, pieces:["W7","C","E7"], note:"中央の3コア"},
+    {n:2, pieces:["W1","E1"],     note:"外枠・東西"},
+    {n:3, pieces:["N2","S2"],     note:"外枠・南北"},
+  ];
+
+  // ===== 19個の中子：位置・形状 =====
+  // id, kind, x, y, w, h, corners('rect'|'all'|'l'|'r'|''), slide方向
+  const PIECES = [
+    ["N2","frame", 60, 80, 920,26,"rect","top"],
+    ["N4","frame", 92,108, 856,24,"rect","top"],
+    ["S4","frame", 92,488, 856,24,"rect","bottom"],
+    ["S2","frame", 60,514, 920,26,"rect","bottom"],
+    ["W1","frame", 60, 80,  26,460,"rect","left"],
+    ["W3","frame", 88,108,  24,404,"rect","left"],
+    ["E3","frame",928,108,  24,404,"rect","right"],
+    ["E1","frame",954, 80,  26,460,"rect","right"],
+    ["W5","core", 112,160,  92,300,"all","pop"],
+    ["W6","core", 273,160,  50,300,"l","pop"],
+    ["W7","core", 323,160,  50,300,"","pop"],
+    ["W8","core", 373,160,  50,300,"r","pop"],
+    ["W9","core", 445,160,  50,300,"l","pop"],
+    ["C", "core", 495,160,  50,300,"","pop"],
+    ["E9","core", 545,160,  50,300,"r","pop"],
+    ["E8","core", 617,160,  50,300,"l","pop"],
+    ["E7","core", 667,160,  50,300,"","pop"],
+    ["E6","core", 717,160,  50,300,"r","pop"],
+    ["E5","core", 836,160,  92,300,"all","pop"],
+  ];
+  const VERT = new Set(["W1","W3","E1","E3"]); // ラベルを縦書き
+  const ROLE = {
+    W1:"外枠・東西（最外）",E1:"外枠・東西（最外）",N2:"外枠・南北",S2:"外枠・南北",
+    W3:"内枠・東西",E3:"内枠・東西",N4:"内枠・南北",S4:"内枠・南北",
+    W5:"端コア（西端）",E5:"端コア（東端）",
+    W6:"中間コア",E6:"中間コア",W7:"中間コア",E7:"中間コア",W8:"中間コア",E8:"中間コア",
+    W9:"中央脇コア",E9:"中央脇コア",C:"中央コア（最後の要）"
+  };
+
+  // lookups
+  const stepOf = {}; STEPS.forEach(s=>s.pieces.forEach(p=>stepOf[p]=s.n));
+  const kindOf = {}, animOf = {}; PIECES.forEach(p=>{kindOf[p[0]]=p[1]; animOf[p[0]]=p[7];});
+
+  // ===== build SVG pieces =====
+  function rrPath(x,y,w,h,c){
+    let tl=0,tr=0,br=0,bl=0; const R = (c==="all")?34:30;
+    if(c==="all"){tl=tr=br=bl=R;} else if(c==="l"){tl=bl=R;} else if(c==="r"){tr=br=R;}
+    let d=`M${x+tl},${y} H${x+w-tr} `;
+    d+= tr?`A${tr},${tr} 0 0 1 ${x+w},${y+tr} `:"";
+    d+=`V${y+h-br} `;
+    d+= br?`A${br},${br} 0 0 1 ${x+w-br},${y+h} `:"";
+    d+=`H${x+bl} `;
+    d+= bl?`A${bl},${bl} 0 0 1 ${x},${y+h-bl} `:"";
+    d+=`V${y+tl} `;
+    d+= tl?`A${tl},${tl} 0 0 1 ${x+tl},${y} `:"";
+    return d+"Z";
+  }
+  const SVGNS="http://www.w3.org/2000/svg";
+  const gPieces=document.getElementById("pieces");
+  PIECES.forEach(([id,kind,x,y,w,h,c])=>{
+    const cx=x+w/2, cy=y+h/2;
+    const g=document.createElementNS(SVGNS,"g");
+    g.setAttribute("class",`piece kind-${kind}`);
+    g.dataset.id=id;
+    let shape;
+    if(c==="rect"){
+      shape=document.createElementNS(SVGNS,"rect");
+      shape.setAttribute("x",x);shape.setAttribute("y",y);
+      shape.setAttribute("width",w);shape.setAttribute("height",h);
+      shape.setAttribute("rx",4);
+    }else{
+      shape=document.createElementNS(SVGNS,"path");
+      shape.setAttribute("d",rrPath(x,y,w,h,c));
+    }
+    shape.setAttribute("class","shape");
+    g.appendChild(shape);
+    const t=document.createElementNS(SVGNS,"text");
+    t.setAttribute("class","lbl");
+    t.setAttribute("x",cx);t.setAttribute("y",cy);
+    t.setAttribute("text-anchor","middle");
+    t.setAttribute("dominant-baseline","central");
+    const fs = kind==="frame"?15:(c==="all"?24:17);
+    t.setAttribute("font-size",fs);
+    if(VERT.has(id)) t.setAttribute("transform",`rotate(-90 ${cx} ${cy})`);
+    t.textContent=id;
+    g.appendChild(t);
+    // out-of-order mark
+    const om=document.createElementNS(SVGNS,"text");
+    om.setAttribute("class","oofmark");
+    om.setAttribute("x",x+w-9);om.setAttribute("y",y+18);
+    om.setAttribute("text-anchor","middle");om.setAttribute("font-size",18);
+    om.setAttribute("font-weight",800);om.setAttribute("fill","#7a5a14");
+    om.textContent="!";
+    g.appendChild(om);
+    gPieces.appendChild(g);
+  });
+  const els={}; gPieces.querySelectorAll(".piece").forEach(g=>els[g.dataset.id]=g);
+
+  const ALL = PIECES.map(p=>p[0]);
+  const removeStepOf = {}; REMOVE_STEPS.forEach(s=>s.pieces.forEach(p=>removeStepOf[p]=s.n));
+
+  // ===== state =====
+  let mode="guide";              // "guide" | "free" | "remove"
+  let placed=new Set();          // ids currently in the mold
+  let history=[];                // [{id, op:"add"|"del", oof:bool}] — unified undo
+  let oof=new Set();             // placed out-of-order (free install only)
+
+  function setupForMode(m){      // guide/free start empty; remove starts fully built
+    placed = new Set(m==="remove" ? ALL : []);
+    history=[]; oof.clear();
+  }
+
+  // install: first step not fully placed
+  function installStepIndex(){
+    for(let i=0;i<STEPS.length;i++)
+      if(!STEPS[i].pieces.every(p=>placed.has(p))) return i;
+    return STEPS.length;
+  }
+  // remove: first enforced step still holding pieces
+  function removeStepIndex(){
+    for(let i=0;i<REMOVE_STEPS.length;i++)
+      if(REMOVE_STEPS[i].pieces.some(p=>placed.has(p))) return i;
+    return REMOVE_STEPS.length; // enforced steps done → free removal
+  }
+
+  // ===== animation =====
+  function applyAnim(id, dir){
+    const g=els[id], base=animOf[id];
+    const cls = dir==="out"
+      ? (base==="pop" ? "anim-out-pop" : "anim-out-"+base)
+      : (base==="pop" ? "anim-pop"     : "anim-"+base);
+    g.classList.add(cls);
+    g.addEventListener("animationend",()=>g.classList.remove(cls),{once:true});
+  }
+
+  // ===== mutations =====
+  function doAdd(id, markOof){
+    placed.add(id); if(markOof) oof.add(id);
+    history.push({id, op:"add", oof:!!markOof});
+    applyAnim(id,"in");
+  }
+  function doDel(id){
+    const wasOof=oof.has(id);
+    placed.delete(id); oof.delete(id);
+    history.push({id, op:"del", oof:wasOof});
+    applyAnim(id,"out");
+  }
+  function undo(){
+    const last=history.pop(); if(!last) return;
+    if(last.op==="add"){ placed.delete(last.id); oof.delete(last.id); applyAnim(last.id,"out"); }
+    else { placed.add(last.id); if(last.oof) oof.add(last.id); applyAnim(last.id,"in"); }
+  }
+
+  // ===== rendering =====
+  function refresh(){
+    if(mode==="remove") refreshRemove(); else refreshInstall();
+    document.getElementById("undo").disabled = history.length===0;
+    refreshStepList();
+    refreshBanner();
+  }
+
+  function refreshInstall(){
+    const si=installStepIndex();
+    const done=si>=STEPS.length;
+    const active = done?[]:STEPS[si].pieces.filter(p=>!placed.has(p));
+    for(const id in els){
+      const g=els[id];
+      g.classList.toggle("placed", placed.has(id));
+      g.classList.toggle("oof", oof.has(id));
+      const isActive = mode==="guide" && active.includes(id);
+      g.classList.toggle("active", isActive);
+      g.classList.toggle("locked", mode==="guide" && !placed.has(id) && !isActive);
+    }
+    document.getElementById("cntK").textContent="設置数";
+    document.getElementById("cnt").textContent=placed.size;
+    document.getElementById("barFill").style.width=(placed.size/ALL.length*100)+"%";
+    const metaK=document.getElementById("metaK"), metaV=document.getElementById("metaV");
+    if(mode==="guide"){
+      metaK.textContent="ステップ";
+      metaV.innerHTML = done ? "完了" : `${STEPS[si].n}<small> / ${STEPS.length}</small>`;
+    }else{
+      metaK.textContent="順番ミス";
+      metaV.innerHTML = `${oof.size}<small> 件</small>`;
+    }
+    const ro=document.getElementById("readout");
+    if(done){
+      ro.innerHTML=`<span class="tag done">完了</span> すべての中子を取り付けました。`;
+    }else if(mode==="guide"){
+      const s=STEPS[si];
+      ro.innerHTML=`<span class="tag">STEP ${s.n}</span> 次に取り付ける中子：`
+        +`<span class="ids">${active.join(" ・ ")}</span> &nbsp;<b>${s.note}</b>`;
+    }else{
+      ro.innerHTML=`自由配置モード：好きな順番でタップ。配置済みをタップすると外せます。`;
+    }
+  }
+
+  function refreshRemove(){
+    const ri=removeStepIndex();
+    const enforcedDone = ri>=REMOVE_STEPS.length;
+    const removable = enforcedDone
+      ? new Set(placed)
+      : new Set(REMOVE_STEPS[ri].pieces.filter(p=>placed.has(p)));
+    for(const id in els){
+      const g=els[id];
+      const present=placed.has(id);
+      g.classList.toggle("placed", present);
+      g.classList.toggle("oof", false);
+      const glow = !enforcedDone && removable.has(id);     // enforced step targets glow
+      g.classList.toggle("active", glow);
+      g.classList.toggle("locked", !enforcedDone && present && !removable.has(id));
+    }
+    const removed = ALL.length - placed.size;
+    document.getElementById("cntK").textContent="取り外し";
+    document.getElementById("cnt").textContent=removed;
+    document.getElementById("barFill").style.width=(removed/ALL.length*100)+"%";
+    const metaK=document.getElementById("metaK"), metaV=document.getElementById("metaV");
+    metaK.textContent="ステップ";
+    if(placed.size===0) metaV.innerHTML="完了";
+    else if(enforcedDone) metaV.innerHTML=`自由<small> ・残り${placed.size}</small>`;
+    else metaV.innerHTML=`${REMOVE_STEPS[ri].n}<small> / ${REMOVE_STEPS.length}</small>`;
+    const ro=document.getElementById("readout");
+    if(placed.size===0){
+      ro.innerHTML=`<span class="tag done">完了</span> すべての中子を取り外しました。`;
+    }else if(enforcedDone){
+      ro.innerHTML=`<span class="tag">自由</span> 残りは順不同で外せます（${placed.size}個）。`;
+    }else{
+      const s=REMOVE_STEPS[ri];
+      ro.innerHTML=`<span class="tag">外す STEP ${s.n}</span> 次に外す中子：`
+        +`<span class="ids">${[...removable].join(" ・ ")}</span> &nbsp;<b>${s.note}</b>`;
+    }
+  }
+
+  function refreshStepList(){
+    document.querySelectorAll("#steps li[data-step]").forEach(li=>{
+      const i=+li.dataset.step;
+      if(mode==="remove"){
+        const ri=removeStepIndex();
+        const removedAll = REMOVE_STEPS[i].pieces.every(p=>!placed.has(p));
+        li.classList.toggle("done", removedAll);
+        li.classList.toggle("cur", i===ri && ri<REMOVE_STEPS.length);
+      }else{
+        const si=installStepIndex(), done=si>=STEPS.length;
+        const full=STEPS[i].pieces.every(p=>placed.has(p));
+        li.classList.toggle("done", full);
+        li.classList.toggle("cur", !done && i===si);
+      }
+    });
+  }
+
+  function refreshBanner(){
+    const db=document.getElementById("doneBanner");
+    let show=false, html="";
+    if(mode==="remove"){
+      if(placed.size===0){ show=true; html=`<b>完了！</b> 正しい手順で19個すべてを取り外しました 🎉`; }
+    }else if(placed.size===ALL.length){
+      show=true;
+      if(mode==="free"){
+        html = oof.size===0
+          ? `<b>完成！</b> すべて正しい順番で取り付けられました 🎉`
+          : `<b>完成！</b> ただし <b>${oof.size}件</b> 順番が前後しました。取付ガイドで確認できます。`;
+      }else{
+        html=`<b>完成！</b> 正しい手順で19個すべてを取り付けました 🎉`;
+      }
+    }
+    db.classList.toggle("show", show);
+    if(show) db.innerHTML=html;
+  }
+
+  // ===== click =====
+  gPieces.addEventListener("click",(e)=>{
+    const g=e.target.closest(".piece"); if(!g) return;
+    const id=g.dataset.id;
+
+    if(mode==="guide"){
+      if(placed.has(id)) return;
+      const si=installStepIndex();
+      const active = si<STEPS.length ? STEPS[si].pieces.filter(p=>!placed.has(p)) : [];
+      if(active.includes(id)){ doAdd(id,false); refresh(); }
+      else{
+        const s=STEPS[si];
+        toast("warn", `まだ STEP ${s.n} です。次に付けるのは `
+          +`<span class="ids">${active.join(" ・ ")}</span>`);
+      }
+      return;
+    }
+
+    if(mode==="free"){
+      if(placed.has(id)){ doDel(id); refresh(); toast("", `${id} を外しました`); return; }
+      const si=installStepIndex();
+      const expected = si<STEPS.length ? STEPS[si].n : STEPS.length;
+      const outOfOrder = stepOf[id] > expected;
+      doAdd(id, outOfOrder); refresh();
+      if(outOfOrder) toast("warn", `順番が前後しています：<span class="ids">${id}</span> は本来 STEP ${stepOf[id]}`);
+      return;
+    }
+
+    // remove mode
+    if(!placed.has(id)) return; // already removed
+    const ri=removeStepIndex();
+    if(ri>=REMOVE_STEPS.length){ doDel(id); refresh(); toast("", `${id} を外しました`); return; }
+    const removable = REMOVE_STEPS[ri].pieces.filter(p=>placed.has(p));
+    if(removable.includes(id)){ doDel(id); refresh(); }
+    else{
+      const s=REMOVE_STEPS[ri];
+      toast("warn", `まだ 取りはずし STEP ${s.n} です。先に外すのは `
+        +`<span class="ids">${removable.join(" ・ ")}</span>`);
+    }
+  });
+
+  // ===== hover readout (desktop) =====
+  gPieces.addEventListener("mouseover",(e)=>{
+    const g=e.target.closest(".piece"); if(!g) return;
+    const id=g.dataset.id;
+    const ro=document.getElementById("readout");
+    if(mode==="remove"){
+      const rs=removeStepOf[id];
+      const where = rs ? `取りはずし STEP ${rs}` : `順不同で取りはずし`;
+      ro.innerHTML=`<span class="ids">${id}</span> — ${where} ・ ${ROLE[id]}`
+        +` &nbsp;<b>${placed.has(id)?"設置中":"取り外し済み"}</b>`;
+    }else{
+      ro.innerHTML=`<span class="ids">${id}</span> — 取り付け STEP ${stepOf[id]} ・ ${ROLE[id]}`
+        +` &nbsp;<b>${placed.has(id)?"設置済み":"未設置"}</b>`;
+    }
+  });
+  gPieces.addEventListener("mouseleave",()=>{ refresh(); });
+
+  // ===== step-list builder (rebuilt on mode change) =====
+  function buildStepList(){
+    const seq = (mode==="remove") ? REMOVE_STEPS : STEPS;
+    const ol=document.getElementById("steps");
+    ol.innerHTML="";
+    seq.forEach((s,i)=>{
+      const li=document.createElement("li");
+      li.dataset.step=i;
+      li.innerHTML=`<span class="no">${String(s.n).padStart(2,"0")}</span>`
+        +`<span class="pc">${s.pieces.join(" · ")}</span>`
+        +`<span class="nt">${s.note}</span>`;
+      ol.appendChild(li);
+    });
+    if(mode==="remove"){
+      const li=document.createElement("li");
+      li.className="free-note";
+      li.innerHTML=`<span class="no">··</span>`
+        +`<span class="pc">残り12個</span>`
+        +`<span class="nt">順不同で取りはずしOK</span>`;
+      ol.appendChild(li);
+    }
+    document.getElementById("stepsTitle").textContent =
+      (mode==="remove") ? "取りはずし順（3ステップ＋順不同）" : `取り付け順（全${STEPS.length}ステップ）`;
+    // keep blur state in sync with the checkbox
+    document.getElementById("steps").classList.toggle("hide-answer", !document.getElementById("showAns").checked);
+  }
+
+  // ===== mode buttons =====
+  const DESC = {
+    guide:"光っている中子をタップすると取り付けられます。順番どおりに進みます。",
+    free:"好きな順番で配置。順番が前後すると印（!）が付きます。配置済みをタップで取り外し。",
+    remove:"組み上がった状態から、光っている中子をタップして正しい順番で取りはずします。"
+  };
+  function setMode(m){
+    mode=m;
+    setupForMode(m);
+    document.getElementById("mGuide").setAttribute("aria-pressed", m==="guide");
+    document.getElementById("mFree").setAttribute("aria-pressed", m==="free");
+    document.getElementById("mRemove").setAttribute("aria-pressed", m==="remove");
+    document.getElementById("modeDesc").textContent = DESC[m];
+    buildStepList();
+    refresh();
+  }
+  document.getElementById("mGuide").onclick =()=>{ if(mode!=="guide")  setMode("guide"); };
+  document.getElementById("mFree").onclick  =()=>{ if(mode!=="free")   setMode("free"); };
+  document.getElementById("mRemove").onclick=()=>{ if(mode!=="remove") setMode("remove"); };
+
+  // ===== actions =====
+  document.getElementById("undo").onclick =()=>{ undo(); refresh(); };
+  document.getElementById("reset").onclick=()=>{ setupForMode(mode); refresh(); };
+  document.getElementById("showAns").onchange=(e)=>{
+    document.getElementById("steps").classList.toggle("hide-answer", !e.target.checked);
+  };
+
+  // ===== toast =====
+  let toastT=null;
+  function toast(kind,html){
+    const el=document.getElementById("toast");
+    el.className=""; if(kind) el.classList.add(kind);
+    el.innerHTML=html; el.classList.add("show");
+    clearTimeout(toastT);
+    toastT=setTimeout(()=>el.classList.remove("show"),2200);
+  }
+
+  // ===== init =====
+  buildStepList();
+  refresh();
+})();
+</script>
+</body>
+</html>
